@@ -84,28 +84,24 @@ contract LFGlobalEscrow {
         }
     }
 
-    ///@dev no need for payable address return
     function owner(
         string calldata _referenceId
     ) public view returns (address payable) {
         return _escrow[_referenceId].owner;
     }
 
-    ///@dev no need for payable address return
     function sender(
         string calldata _referenceId
     ) public view returns (address payable) {
         return _escrow[_referenceId].sender;
     }
 
-    ///@dev no need for payable address return
     function receiver(
         string calldata _referenceId
     ) public view returns (address payable) {
         return _escrow[_referenceId].receiver;
     }
 
-    ///@dev no need for payable address return
     function agent(
         string calldata _referenceId
     ) public view returns (address) {
