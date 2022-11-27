@@ -11,21 +11,22 @@ contract LFGlobalEscrow {
         RELEASE
     }
 
-    /// @dev in the matter of Higher-order byte clean storage we sort variables that fills 32bytes slots and don't waste storage slot
+    /// @dev in the matter of Higher-order byte clean storage we sort variables that fills 32bytes slots
+    /// @dev No need for agent address to be payable as it won't be owner at all
     struct Record {
-        string referenceId; //32bytes
-        uint256 releaseCount; //32bytes
-        uint256 revertCount; //32bytes
-        uint256 lastTxBlock; //32bytes
-        uint256 fund; //32bytes
-        mapping(address => bool) signer; //32bytes
-        mapping(address => Sign) signed; //32bytes
-        address payable owner; //20bytes
-        address payable sender; //20bytes
-        address payable receiver; //20bytes
-        address payable agent; //20bytes
-        bool disputed; //1byte
-        bool finalized; //1byte
+        string referenceId; 
+        uint256 releaseCount; 
+        uint256 revertCount; 
+        uint256 lastTxBlock; 
+        uint256 fund; 
+        mapping(address => bool) signer; 
+        mapping(address => Sign) signed; 
+        address payable owner; 
+        address payable sender; 
+        address payable receiver; 
+        address agent; 
+        bool disputed;
+        bool finalized;
     }
 
     mapping(string => Record) _escrow;
@@ -107,7 +108,7 @@ contract LFGlobalEscrow {
     ///@dev no need for payable address return
     function agent(
         string calldata _referenceId
-    ) public view returns (address payable) {
+    ) public view returns (address) {
         return _escrow[_referenceId].agent;
     }
 
@@ -223,12 +224,18 @@ contract LFGlobalEscrow {
 
     ///@dev should check if disputed
     ///@dev dispute better to be external
+    ///@dev Whether the caller is Receiver or Sender should have signed already to let agent dispute the escrow
     function dispute(string calldata _referenceId) external {
         Record storage e = _escrow[_referenceId];
         require(!e.finalized, "Escrow should not be finalized");
+        require(!e.disputed, "Escrow should not be disputed");
         require(
             msg.sender == e.sender || msg.sender == e.receiver,
             "Only sender or receiver can call dispute"
+        );
+        require(
+            e.signed[msg.sender] == Sign.REVERT || e.signed[msg.sender] == Sign.RELEASE,
+            "msg sender should have signed already"
         );
         _dispute(e);
     }
@@ -248,7 +255,7 @@ contract LFGlobalEscrow {
     ///@dev after there is a dispute _agent can do the last vote on revert or release
     function _dispute(Record storage e) private {
         e.disputed = true;
-        e.signer[_agent] = true;
+        e.signer[e.agent] = true;
         e.lastTxBlock = block.number;
         emit Disputed(e.referenceId, msg.sender, e.lastTxBlock);
     }
