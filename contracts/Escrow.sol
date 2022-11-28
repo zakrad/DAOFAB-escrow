@@ -84,6 +84,62 @@ contract LFGlobalEscrow {
         }
     }
 
+    ///@dev we sort functions by external -> public -> internal -> private
+    ///@dev use calldata as data is readonly instead of memory
+
+    ///@dev it is better to use transfer or low level call instead of send and for this case transfer is good enough
+    ///@dev emit event after withdraw
+    function withdraw(string calldata _referenceId, uint256 _amount) external {
+        Record storage e = _escrow[_referenceId];
+        require(e.finalized, "Escrow should be finalized before withdrawal");
+        require(msg.sender == e.owner, "only owner can withdraw funds");
+        require(_amount <= e.fund, "cannot withdraw more than the deposit");
+        e.fund -= _amount;
+        e.lastTxBlock = block.number;
+        e.owner.transfer(_amount);
+        emit Withdrawn(_referenceId, msg.sender, _amount, e.lastTxBlock);
+    }
+
+    ///@dev emit event after the release
+    ///@dev release better to be external
+    function release(
+        string calldata _referenceId
+    ) external multisigcheck(_referenceId) {
+        Record storage e = _escrow[_referenceId];
+        e.signed[msg.sender] = Sign.RELEASE;
+        e.releaseCount++;
+        emit Signature(_referenceId, msg.sender, Sign.RELEASE, e.lastTxBlock);
+    }
+
+    ///@dev reverse better to be external
+    ///@dev emit event after the reverse
+    function reverse(
+        string calldata _referenceId
+    ) external multisigcheck(_referenceId) {
+        Record storage e = _escrow[_referenceId];
+        e.signed[msg.sender] = Sign.REVERT;
+        e.revertCount++;
+        emit Signature(_referenceId, msg.sender, Sign.REVERT, e.lastTxBlock);
+    }
+
+    ///@dev should check if disputed
+    ///@dev dispute better to be external
+    ///@dev Whether the caller is Receiver or Sender should have signed already to let agent dispute the escrow
+    function dispute(string calldata _referenceId) external {
+        Record storage e = _escrow[_referenceId];
+        require(!e.finalized, "Escrow should not be finalized");
+        require(!e.disputed, "Escrow should not be disputed");
+        require(
+            msg.sender == e.sender || msg.sender == e.receiver,
+            "Only sender or receiver can call dispute"
+        );
+        require(
+            e.signed[msg.sender] == Sign.REVERT || e.signed[msg.sender] == Sign.RELEASE,
+            "msg sender should have signed already"
+        );
+        _dispute(e);
+    }
+
     function owner(
         string calldata _referenceId
     ) public view returns (address payable) {
@@ -196,46 +252,6 @@ contract LFGlobalEscrow {
         );
     }
 
-    ///@dev emit event after the release
-    ///@dev release better to be external
-    function release(
-        string calldata _referenceId
-    ) external multisigcheck(_referenceId) {
-        Record storage e = _escrow[_referenceId];
-        e.signed[msg.sender] = Sign.RELEASE;
-        e.releaseCount++;
-        emit Signature(_referenceId, msg.sender, Sign.RELEASE, e.lastTxBlock);
-    }
-
-    ///@dev reverse better to be external
-    ///@dev emit event after the reverse
-    function reverse(
-        string calldata _referenceId
-    ) external multisigcheck(_referenceId) {
-        Record storage e = _escrow[_referenceId];
-        e.signed[msg.sender] = Sign.REVERT;
-        e.revertCount++;
-        emit Signature(_referenceId, msg.sender, Sign.REVERT, e.lastTxBlock);
-    }
-
-    ///@dev should check if disputed
-    ///@dev dispute better to be external
-    ///@dev Whether the caller is Receiver or Sender should have signed already to let agent dispute the escrow
-    function dispute(string calldata _referenceId) external {
-        Record storage e = _escrow[_referenceId];
-        require(!e.finalized, "Escrow should not be finalized");
-        require(!e.disputed, "Escrow should not be disputed");
-        require(
-            msg.sender == e.sender || msg.sender == e.receiver,
-            "Only sender or receiver can call dispute"
-        );
-        require(
-            e.signed[msg.sender] == Sign.REVERT || e.signed[msg.sender] == Sign.RELEASE,
-            "msg sender should have signed already"
-        );
-        _dispute(e);
-    }
-
     ///@dev rename it so that if we use ownable library (which we don't right now) it has same name functions
     ///@dev emit event after dispute
     ///@dev release better to be private because contract has no inheritance
@@ -265,16 +281,5 @@ contract LFGlobalEscrow {
         emit Finalized(e.referenceId, e.owner, e.lastTxBlock);
     }
 
-    ///@dev it is better to use transfer or low level call instead of send and for this case transfer is good enough
-    ///@dev emit event after withdraw
-    function withdraw(string calldata _referenceId, uint256 _amount) external {
-        Record storage e = _escrow[_referenceId];
-        require(e.finalized, "Escrow should be finalized before withdrawal");
-        require(msg.sender == e.owner, "only owner can withdraw funds");
-        require(_amount <= e.fund, "cannot withdraw more than the deposit");
-        e.fund -= _amount;
-        e.lastTxBlock = block.number;
-        e.owner.transfer(_amount);
-        emit Withdrawn(_referenceId, msg.sender, _amount, e.lastTxBlock);
-    }
+
 }
